@@ -7,6 +7,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import static io.github.shadow578.tenshi.extensionslib.lang.LanguageUtil.*;
+
 /**
  * activity portion of a ActivityAdapter, to handle the main logic
  * Implement {@link #getServiceClass()}, call {@link #loadAdapterParams()} in {@link #onCreate(Bundle)} and you're good to go.
@@ -89,7 +91,7 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
     protected boolean loadAdapterParams() {
         // ensure we have a intent
         final Intent i = getIntent();
-        if (i == null)
+        if (isNull(i))
             return false;
 
         // load data
@@ -100,8 +102,7 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
         persistentStorage = i.getStringExtra(EXTRA_PERSISTENT_STORAGE);
 
         // persistent storage is optional, but cannot be null
-        if (persistentStorage == null)
-            persistentStorage = "";
+        persistentStorage = elvis(persistentStorage, "");
 
         return true;
     }
@@ -113,7 +114,7 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
      * @param streamUrl the stream url for the callback
      */
     protected void invokeCallback(@Nullable String streamUrl) {
-        invokeCallback(streamUrl, persistentStorage == null ? "" : persistentStorage);
+        invokeCallback(streamUrl, elvis(persistentStorage, ""));
     }
 
     /**
