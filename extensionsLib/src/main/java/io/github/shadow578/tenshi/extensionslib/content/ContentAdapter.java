@@ -120,35 +120,40 @@ public class ContentAdapter implements ServiceConnection {
         bind(ctx);
 
         try {
-            // get all unique names
-            final String[] uniqueNames = adapter.getUniqueNames();
-            if (isNull(uniqueNames) || uniqueNames.length <= 0)
-                return null;
+            synchronized (ADAPTER_LOCK) {
+                // wait until the service is bound
+                waitUntilServiceConnected();
 
-            // init a wrapper for every unique name
-            ArrayList<ContentAdapterWrapper> wrappers = new ArrayList<>();
-            for (String unName : uniqueNames) {
-                // skip if no or empty unique name
-                if (nullOrEmpty(unName)) {
-                    Log.e("TenshiCP", fmt("service %s does not have a unique name\n" +
-                            "if you're developing this adapter, make sure your adapter implements getUniqueName() correctly", service.name));
-                    continue;
+                // get all unique names
+                final String[] uniqueNames = adapter.getUniqueNames();
+                if (isNull(uniqueNames) || uniqueNames.length <= 0)
+                    return null;
+
+                // init a wrapper for every unique name
+                ArrayList<ContentAdapterWrapper> wrappers = new ArrayList<>();
+                for (String unName : uniqueNames) {
+                    // skip if no or empty unique name
+                    if (nullOrEmpty(unName)) {
+                        Log.e("TenshiCP", fmt("service %s does not have a unique name\n" +
+                                "if you're developing this adapter, make sure your adapter implements getUniqueName() correctly", service.name));
+                        continue;
+                    }
+
+                    // get the display name for this unique name
+                    final String diName = elvisEmpty(adapter.getDisplayName(unName), unName);
+
+                    // log a warning if no display name found
+                    // but fallback to the unique name)
+                    if (unName.equalsIgnoreCase(diName))
+                        Log.w("TenshiCP", fmt("content adapter %s does not define a display name (or it's equal to the unique name)! \n " +
+                                "If you're developing this adapter, please consider implementing getDisplayName() in your adapter", unName));
+
+                    // create the wrapper and add it
+                    wrappers.add(new ContentAdapterWrapper(this, unName, diName));
                 }
 
-                // get the display name for this unique name
-                final String diName = elvisEmpty(adapter.getDisplayName(unName), unName);
-
-                // log a warning if no display name found
-                // but fallback to the unique name)
-                if (unName.equalsIgnoreCase(diName))
-                    Log.w("TenshiCP", fmt("content adapter %s does not define a display name (or it's equal to the unique name)! \n " +
-                            "If you're developing this adapter, please consider implementing getDisplayName() in your adapter", unName));
-
-                // create the wrapper and add it
-                wrappers.add(new ContentAdapterWrapper(this, unName, diName));
+                return wrappers;
             }
-
-            return wrappers;
         } catch (RemoteException ex) {
             Log.e("TenshiCP", "exception in bind: " + ex.toString());
             ex.printStackTrace();
