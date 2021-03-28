@@ -3,7 +3,7 @@ package io.github.shadow578.tenshi.extensionslib.content;
 
 /**
 * AIDL interface class for Tenshi Content Adapter callback
-* Version 1 (Keep this in sync with io.github.shadow578.tenshi.extensionslib.content.Constants#API_VERSION)
+* Version 2 (Keep this in sync with io.github.shadow578.tenshi.extensionslib.content.Constants#API_VERSION)
 */
 interface IContentCallback {
 

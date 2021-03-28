@@ -8,8 +8,12 @@ import android.os.RemoteException;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.HashMap;
+
 import io.github.shadow578.tenshi.extensionslib.content.IContentAdapter;
 import io.github.shadow578.tenshi.extensionslib.content.IContentCallback;
+
+import static io.github.shadow578.tenshi.extensionslib.lang.LanguageUtil.notNull;
 
 /**
  * service portion of a ActivityAdapter, to register to Tenshi.
@@ -37,13 +41,17 @@ public abstract class ActivityAdapterService<T extends ActivityAdapterActivity<?
      * persistent storage to pass to callback, string
      */
     public static final String EXTRA_RESULT_PERSISTENT_STORAGE = "persistentStorage";
+
+    /**
+     * unique name to use to get the callback, string
+     */
+    public static final String EXTRA_RESULT_UNIQUE_NAME = "uniqueName";
     //endregion
 
     /**
-     * internal callback reference
+     * internal callback references
      */
-    @Nullable
-    private IContentCallback callback = null;
+    private final HashMap<String, IContentCallback> callbacks = new HashMap<>();
 
     @Nullable
     @Override
@@ -54,23 +62,27 @@ public abstract class ActivityAdapterService<T extends ActivityAdapterActivity<?
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         final String action = intent.getAction();
-        if (callback != null && action.equals(ACTION_NOTIFY_RESULT)) {
-            // this is NOTIFY_RESULT action and we have a callback, call it!
+        if (action.equals(ACTION_NOTIFY_RESULT)) {
+            // this is NOTIFY_RESULT action
             // get extras for the call
+            final String uniqueName = intent.getStringExtra(EXTRA_RESULT_UNIQUE_NAME);
             final String streamUrl = intent.getStringExtra(EXTRA_RESULT_STREAM_URL);
             String persistentStor = intent.getStringExtra(EXTRA_RESULT_PERSISTENT_STORAGE);
             if (persistentStor == null)
                 persistentStor = "";
 
+            // find the callback for this un
+            // also remove it from the map so we dont call it twice
+            final IContentCallback callback = callbacks.get(uniqueName);
+            callbacks.remove(uniqueName);
+
             // invoke the callback
             try {
-                callback.streamUriResult(streamUrl, persistentStor);
+                if (notNull(callback))
+                    callback.streamUriResult(streamUrl, persistentStor);
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
-
-            // clear the callback so we don't call it another time
-            callback = null;
         }
 
         return super.onStartCommand(intent, flags, startId);
@@ -85,14 +97,67 @@ public abstract class ActivityAdapterService<T extends ActivityAdapterActivity<?
     protected abstract Class<T> getActivityClass();
 
     /**
+     * get the unique names included in this adapter
+     *
+     * @return the unique names in this adapter
+     */
+    @NonNull
+    protected abstract String[] getUniqueNames();
+
+    /**
+     * get the display name for a given unique name in this adapter
+     *
+     * @param uniqueName the unique name to get the display name of
+     * @return the display name
+     */
+    @NonNull
+    protected abstract String getDisplayName(@NonNull String uniqueName);
+
+    /**
      * adapter class for a ActivityAdapterActivity
-     * just opens a {@link ActivityAdapterActivity} with required extras and sets {@link #callback}
+     * just opens a {@link ActivityAdapterActivity} with required extras and add a entry in {@link #callbacks}
      */
     private class ActivityAdapter extends IContentAdapter.Stub {
+        /**
+         * get the unique names included in this adapter
+         *
+         * @return the unique names in this adapter
+         */
         @Override
-        public void requestStreamUri(int malID, String enTitle, String jpTitle, int episode, String peristentStorage, IContentCallback cb) {
+        public String[] getUniqueNames() {
+            return ActivityAdapterService.this.getUniqueNames();
+        }
+
+        /**
+         * get the display name for a given unique name in this adapter
+         *
+         * @param uniqueName the unique name
+         * @return the display name
+         */
+        @Override
+        public String getDisplayName(String uniqueName) {
+            if (notNull(uniqueName))
+                return ActivityAdapterService.this.getDisplayName(uniqueName);
+            return uniqueName;
+        }
+
+        /**
+         * query a video stream URI for a anime and episode.
+         * if this anime is not found or no uri can be found for some other reason, return null
+         *
+         * @param uniqueName       the unique name of the adapter to query the uri from
+         * @param malID            the anime's id on MAL
+         * @param enTitle          the english title of the anime (from MAL)
+         * @param jpTitle          the japanese title of the anime (from MAL)
+         * @param episode          the episode number to get the stream url of
+         * @param peristentStorage persistent storage
+         * @param cb               callback that is called when the stream uri was found
+         */
+        @Override
+        public void requestStreamUri(String uniqueName, int malID, String enTitle, String jpTitle, int episode, String peristentStorage, IContentCallback cb) {
             // set callback
-            callback = cb;
+            callbacks.remove(uniqueName);
+            callbacks.put(uniqueName, cb);
 
             // start activity
             final Intent i = new Intent(getApplicationContext(), getActivityClass());
@@ -105,6 +170,7 @@ public abstract class ActivityAdapterService<T extends ActivityAdapterActivity<?
             i.putExtra(ActivityAdapterActivity.EXTRA_ANIME_TITLE_JP, jpTitle);
             i.putExtra(ActivityAdapterActivity.EXTRA_TARGET_EPISODE, episode);
             i.putExtra(ActivityAdapterActivity.EXTRA_PERSISTENT_STORAGE, peristentStorage);
+            i.putExtra(ActivityAdapterActivity.EXTRA_UNIQUE_NAME, uniqueName);
             getApplicationContext().startActivity(i);
         }
     }

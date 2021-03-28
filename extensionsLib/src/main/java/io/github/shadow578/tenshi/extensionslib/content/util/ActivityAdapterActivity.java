@@ -45,6 +45,11 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
      * persistent storage, string
      */
     public static final String EXTRA_PERSISTENT_STORAGE = "persistentStorage";
+
+    /**
+     * unique name, string
+     */
+    public static final String EXTRA_UNIQUE_NAME = "uniqueName";
     //endregion
 
     //region call params
@@ -73,6 +78,12 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
      * Automatically used in {@link #invokeCallback(String)}
      */
     protected String persistentStorage;
+
+    /**
+     * unique name to work under.
+     * Automatically used in {@link #invokeCallback(String)}
+     */
+    protected String uniqueName;
     //endregion
 
     /**
@@ -88,6 +99,7 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
      *
      * @return was the load successful? if false, do not continue
      */
+    @SuppressWarnings({"unused", "RedundantSuppression"})
     protected boolean loadAdapterParams() {
         // ensure we have a intent
         final Intent i = getIntent();
@@ -100,11 +112,12 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
         jpTitle = i.getStringExtra(EXTRA_ANIME_TITLE_JP);
         episode = i.getIntExtra(EXTRA_TARGET_EPISODE, -1);
         persistentStorage = i.getStringExtra(EXTRA_PERSISTENT_STORAGE);
+        uniqueName = i.getStringExtra(EXTRA_UNIQUE_NAME);
 
         // persistent storage is optional, but cannot be null
         persistentStorage = elvis(persistentStorage, "");
 
-        return true;
+        return !nullOrEmpty(uniqueName);
     }
 
     /**
@@ -113,6 +126,7 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
      *
      * @param streamUrl the stream url for the callback
      */
+    @SuppressWarnings({"unused", "RedundantSuppression"})
     protected void invokeCallback(@Nullable String streamUrl) {
         invokeCallback(streamUrl, elvis(persistentStorage, ""));
     }
@@ -129,6 +143,7 @@ public abstract class ActivityAdapterActivity<T extends ActivityAdapterService<?
         i.setAction(ActivityAdapterService.ACTION_NOTIFY_RESULT);
         i.putExtra(ActivityAdapterService.EXTRA_RESULT_STREAM_URL, streamUrl);
         i.putExtra(ActivityAdapterService.EXTRA_RESULT_PERSISTENT_STORAGE, persStorage);
+        i.putExtra(ActivityAdapterService.EXTRA_RESULT_UNIQUE_NAME, uniqueName);
         startService(i);
     }
 

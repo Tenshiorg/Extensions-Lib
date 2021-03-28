@@ -7,18 +7,21 @@ import android.content.ServiceConnection;
 import android.content.pm.ServiceInfo;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.RemoteException;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import io.github.shadow578.tenshi.extensionslib.lang.Consumer;
 
-import static io.github.shadow578.tenshi.extensionslib.content.Constants.ACTION_TENSHI_CONTENT;
-import static io.github.shadow578.tenshi.extensionslib.content.Constants.CATEGORY_TENSHI_CONTENT;
-import static io.github.shadow578.tenshi.extensionslib.content.Constants.META_ADAPTER_API_VERSION;
-import static io.github.shadow578.tenshi.extensionslib.content.Constants.META_DISPLAY_NAME;
-import static io.github.shadow578.tenshi.extensionslib.content.Constants.META_UNIQUE_NAME;
+import static io.github.shadow578.tenshi.extensionslib.content.Constants.ACTION_TENSHI_CONTENT_ADAPTER;
+import static io.github.shadow578.tenshi.extensionslib.content.Constants.CATEGORY_TENSHI_CONTENT_ADAPTER;
+import static io.github.shadow578.tenshi.extensionslib.content.Constants.META_API_VERSION;
+import static io.github.shadow578.tenshi.extensionslib.content.Constants.TARGET_API_VERSION;
 import static io.github.shadow578.tenshi.extensionslib.lang.LanguageUtil.async;
 import static io.github.shadow578.tenshi.extensionslib.lang.LanguageUtil.elvisEmpty;
 import static io.github.shadow578.tenshi.extensionslib.lang.LanguageUtil.fmt;
@@ -48,18 +51,6 @@ public class ContentAdapter implements ServiceConnection {
     private final int apiVersion;
 
     /**
-     * the unique name of this adapter
-     */
-    @NonNull
-    private final String uniqueName;
-
-    /**
-     * the display name of this adapter
-     */
-    @NonNull
-    private final String displayName;
-
-    /**
      * the AIDL service connection. null if not yet connected or disconnected
      */
     @Nullable
@@ -77,24 +68,26 @@ public class ContentAdapter implements ServiceConnection {
      */
     private boolean didDisconnect = false;
 
-    private ContentAdapter(@Nullable ContentAdapterManager.IPersistentStorageProvider psProvider, @NonNull ServiceInfo svc, int apiVer, @NonNull String uName, @NonNull String dName) {
+    private ContentAdapter(@Nullable ContentAdapterManager.IPersistentStorageProvider psProvider,
+                           @NonNull ServiceInfo svc,
+                           int apiVer) {
         persistentStorageProvider = psProvider;
         service = svc;
         apiVersion = apiVer;
-        uniqueName = uName;
-        displayName = dName;
     }
 
+
     /**
-     * create a new Content Adapter from a given service that has the {@link Constants#ACTION_TENSHI_CONTENT}
+     * create a new Content Adapter from a given service that has the {@link Constants#ACTION_TENSHI_CONTENT_ADAPTER}
      * Requires the service info to have metadata
      *
      * @param svc        the service to create the adapter from
      * @param psProvider persistent storage provider to use
-     * @return the adapter instance, or null if creation failed
+     * @return the adapter instance, or null if creation failed (eg. service binding failed, or api version is out of date)
      */
     @Nullable
-    public static ContentAdapter fromServiceInfo(@NonNull ServiceInfo svc, @Nullable ContentAdapterManager.IPersistentStorageProvider psProvider) {
+    public static ContentAdapter fromServiceInfo(@NonNull ServiceInfo svc,
+                                                 @Nullable ContentAdapterManager.IPersistentStorageProvider psProvider) {
         // get metadata
         final Bundle meta = svc.metaData;
 
@@ -103,31 +96,72 @@ public class ContentAdapter implements ServiceConnection {
             return null;
 
         // get api version from meta
-        final int apiVersion = meta.getInt(META_ADAPTER_API_VERSION, -1);
+        final int apiVersion = meta.getInt(META_API_VERSION, -1);
 
-        // get unique and display name from meta
-        final String uniqueName = meta.getString(META_UNIQUE_NAME, null);
-        final String displayName = meta.getString(META_DISPLAY_NAME, uniqueName);
-
-        // abort if unique name not found
-        if (nullOrEmpty(uniqueName)) {
-            Log.e("TenshiCP", fmt("service %s does not have a unique name\n" +
-                    "if you're developing this adapter, make sure you added %s as metadata of your service.", svc.name, META_UNIQUE_NAME));
+        // only create if api version requirement is met
+        if (apiVersion < TARGET_API_VERSION) {
+            Log.w("TenshiCP", fmt("Content adapter %s is outdated (found: %d ; target: %d)", svc.name, apiVersion, TARGET_API_VERSION));
             return null;
         }
 
-        // log a warning if no display name found
-        // but fallback to the unique name)
-        if (uniqueName.equalsIgnoreCase(displayName))
-            Log.w("TenshiCP", fmt("content adapter %s does not define a display name (or it's equal to the unique name)! \n " +
-                    "If you're developing this adapter, please consider adding %s metadata to your adapter's manifest.", uniqueName, META_DISPLAY_NAME));
-
-        // create the content adapter instance and return
-        return new ContentAdapter(psProvider, svc, apiVersion, uniqueName, displayName);
+        // create the content adapter instance it
+        return new ContentAdapter(psProvider, svc, apiVersion);
     }
 
     /**
-     * bind the service of this content adapter. do this before calling {@link ContentAdapter#requestStreamUri(int, String, String, int, Consumer)}
+     * initialize the adapter and create wrappers for all available unique names
+     *
+     * @param ctx       context to bind the service in. binding is required to create the wrappers
+     * @param keepBound should the adapter stay bound?
+     * @return was init successful?
+     */
+    public List<ContentAdapterWrapper> initWrappers(@NonNull Context ctx, boolean keepBound) {
+        // bind the adapter
+        bind(ctx);
+
+        try {
+            // get all unique names
+            final String[] uniqueNames = adapter.getUniqueNames();
+            if (isNull(uniqueNames) || uniqueNames.length <= 0)
+                return null;
+
+            // init a wrapper for every unique name
+            ArrayList<ContentAdapterWrapper> wrappers = new ArrayList<>();
+            for (String unName : uniqueNames) {
+                // skip if no or empty unique name
+                if (nullOrEmpty(unName)) {
+                    Log.e("TenshiCP", fmt("service %s does not have a unique name\n" +
+                            "if you're developing this adapter, make sure your adapter implements getUniqueName() correctly", service.name));
+                    continue;
+                }
+
+                // get the display name for this unique name
+                final String diName = elvisEmpty(adapter.getDisplayName(unName), unName);
+
+                // log a warning if no display name found
+                // but fallback to the unique name)
+                if (unName.equalsIgnoreCase(diName))
+                    Log.w("TenshiCP", fmt("content adapter %s does not define a display name (or it's equal to the unique name)! \n " +
+                            "If you're developing this adapter, please consider implementing getDisplayName() in your adapter", unName));
+
+                // create the wrapper and add it
+                wrappers.add(new ContentAdapterWrapper(this, unName, diName));
+            }
+
+            return wrappers;
+        } catch (RemoteException ex) {
+            Log.e("TenshiCP", "exception in bind: " + ex.toString());
+            ex.printStackTrace();
+            return null;
+        } finally {
+            // unbind the service unless keepBound is set
+            if (!keepBound)
+                unbind(ctx);
+        }
+    }
+
+    /**
+     * bind the service of this content adapter. do this before calling {@link #requestStreamUri(String, int, String, String, int, Consumer)}
      *
      * @param ctx the context to bind from
      */
@@ -154,33 +188,13 @@ public class ContentAdapter implements ServiceConnection {
     }
 
     /**
-     * get the unique name of this adapter
-     *
-     * @return the unique name of this adapter
-     */
-    @NonNull
-    public String getUniqueName() {
-        return uniqueName;
-    }
-
-    /**
-     * get the display name of this adapter
-     *
-     * @return the display name of this adapter
-     */
-    @NonNull
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    /**
      * get a intent for the service
      *
      * @return the intent for the service
      */
     private Intent getServiceIntent() {
-        final Intent i = new Intent(ACTION_TENSHI_CONTENT);
-        i.addCategory(CATEGORY_TENSHI_CONTENT);
+        final Intent i = new Intent(ACTION_TENSHI_CONTENT_ADAPTER);
+        i.addCategory(CATEGORY_TENSHI_CONTENT_ADAPTER);
         i.setComponent(new ComponentName(service.packageName, service.name));
         return i;
     }
@@ -213,28 +227,29 @@ public class ContentAdapter implements ServiceConnection {
      * query a video stream URI for a anime and episode.
      * if this anime is not found or no uri can be found for some other reason, return null
      *
-     * @param malID    the anime's id on MAL
-     * @param enTitle  the english title of the anime (from MAL)
-     * @param jpTitle  the japanese title of the anime (from MAL)
-     * @param episode  the episode number to get the stream url of
-     * @param callback the callback called as soon as the service answered. The result may be null if the service died or answered null.
+     * @param uniqueName unique name to query from
+     * @param malID      the anime's id on MAL
+     * @param enTitle    the english title of the anime (from MAL)
+     * @param jpTitle    the japanese title of the anime (from MAL)
+     * @param episode    the episode number to get the stream url of
+     * @param callback   the callback called as soon as the service answered. The result may be null if the service died or answered null.
      */
-    public void requestStreamUri(int malID, @NonNull String enTitle, @NonNull String jpTitle, int episode, @NonNull Consumer<String> callback) {
+    public void requestStreamUri(@NonNull String uniqueName, int malID, @NonNull String enTitle, @NonNull String jpTitle, int episode, @NonNull Consumer<String> callback) {
         async(() -> {
             try {
                 synchronized (ADAPTER_LOCK) {
                     if (waitUntilServiceConnected() && notNull(adapter)) {
                         // load persistent storage for this adapter
-                        final String storageIn = notNull(persistentStorageProvider) ? persistentStorageProvider.getPersistentStorage(getUniqueName(), malID) : "";
+                        final String storageIn = notNull(persistentStorageProvider) ? persistentStorageProvider.getPersistentStorage(uniqueName, malID) : "";
 
                         // request uri
-                        adapter.requestStreamUri(malID, enTitle, jpTitle, episode, storageIn, new IContentCallback.Stub() {
+                        adapter.requestStreamUri(uniqueName, malID, enTitle, jpTitle, episode, storageIn, new IContentCallback.Stub() {
                             @Override
                             public void streamUriResult(String streamUri, String persistentStorage) {
                                 // save modified storage
                                 final String storageOut = elvisEmpty(persistentStorage, "");
                                 if (notNull(persistentStorageProvider) && !storageOut.equals(storageIn))
-                                    persistentStorageProvider.setPersistentStorage(getUniqueName(), malID, storageOut);
+                                    persistentStorageProvider.setPersistentStorage(uniqueName, malID, storageOut);
 
                                 // run callback on ui thread
                                 async(() -> streamUri, callback);
