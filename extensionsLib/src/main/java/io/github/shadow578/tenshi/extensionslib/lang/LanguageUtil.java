@@ -380,7 +380,7 @@ public final class LanguageUtil {
      * @return is s null, empty or only whitespace
      */
     public static boolean nullOrWhitespace(@Nullable String s) {
-        return nullOrEmpty(s) || s.trim().isEmpty();
+        return s == null || s.trim().isEmpty();
     }
     //endregion
 
