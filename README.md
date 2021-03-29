@@ -1,9 +1,6 @@
-# ![App Icon](.github/res/app-icon.png) Tenshi Extensions Lib
-Tenshi is a free & open source client for [MyAnimeList](https://myanimelist.net) for Android 6.0 and above.
-
-
-⚠ This Page is under Construction ⚠
-
+# ![App Icon](.github/res/app-icon.png) Tenshi ExtensionsLib
+This is a library for [Tenshi](https://github.com/Tenshiorg/Tenshi) extensions (mainly Content Adapters).<br>
+Take a look at [Tenshi-Content](https://github.com/Tenshiorg/Tenshi-Content) for usage examples.
 
 ## License
 > Copyright 2021 shadow578
