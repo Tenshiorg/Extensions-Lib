@@ -541,17 +541,25 @@ public final class LanguageUtil {
 
     /**
      * run a action async and post the result to a callback in the main thread.
+     *
      * @param action the action to execute
-     * @param callback the callback to post the result to. Result may be null
-     * @param <Rt> action return type
      */
-    public static <Rt> void async(@NonNull Action<Rt> action, @NonNull Consumer<Rt> callback)
-    {
+    public static void async(@NonNull Method action) {
+        backgroundExecutor.execute(action::invoke);
+    }
+
+    /**
+     * run a action async and post the result to a callback in the main thread.
+     *
+     * @param action   the action to execute
+     * @param callback the callback to post the result to. Result may be null
+     * @param <Rt>     action return type
+     */
+    public static <Rt> void async(@NonNull Action<Rt> action, @NonNull Consumer<Rt> callback) {
         backgroundExecutor.execute(() -> {
             final Rt r = action.invoke();
-            mainThreadHandler.post(() -> {
-                callback.invoke(r);
-            });
+            mainThreadHandler.post(()
+                    -> callback.invoke(r));
         });
     }
     //endregion
