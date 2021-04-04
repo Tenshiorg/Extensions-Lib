@@ -354,6 +354,25 @@ foreach(someList, (itm, i) -> {
 })
 ```
 
+## where
+filters a collection using a function
+
+Usage: 
+```java
+List<String> someList = ...;
+List<String> filtered = where(someList, (s) -> {
+    if(...){
+        // keep this item
+        return true;
+    }
+    else{
+        // remove this item
+        return false;
+    }
+});
+```
+
+
 ## collect
 Collects the results of a function call for all items in a collection
 

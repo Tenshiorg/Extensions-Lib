@@ -12,6 +12,8 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -414,6 +416,32 @@ public final class LanguageUtil {
         int i = 0;
         for (T t : list)
             func.invoke(t, i++);
+    }
+
+    /**
+     * filter the entries of a collection. the original collections is not modified
+     *
+     * @param list   the collection to filter
+     * @param filter the filter function
+     * @param <T>    list type
+     * @return the filtered list. this may be empty, but never null
+     */
+    @NonNull
+    public static <T> List<T> where(@Nullable Collection<T> list, @NonNull Function<Boolean, T> filter) {
+        if (isNull(list) || list.isEmpty())
+            return new ArrayList<>();
+
+        // copy the list
+        final ArrayList<T> filteredList = new ArrayList<>(list);
+
+        // iterate over list
+        final Iterator<T> i = filteredList.iterator();
+        while (i.hasNext()) {
+            if (!filter.invoke(i.next()))
+                i.remove();
+        }
+
+        return filteredList;
     }
 
     /**
