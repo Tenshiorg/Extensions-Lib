@@ -12,6 +12,8 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -417,6 +419,32 @@ public final class LanguageUtil {
     }
 
     /**
+     * filter the entries of a collection. the original collections is not modified
+     *
+     * @param list   the collection to filter
+     * @param filter the filter function
+     * @param <T>    list type
+     * @return the filtered list. this may be empty, but never null
+     */
+    @NonNull
+    public static <T> List<T> where(@Nullable Collection<T> list, @NonNull Function<Boolean, T> filter) {
+        if (isNull(list) || list.isEmpty())
+            return new ArrayList<>();
+
+        // copy the list
+        final ArrayList<T> filteredList = new ArrayList<>(list);
+
+        // iterate over list
+        final Iterator<T> i = filteredList.iterator();
+        while (i.hasNext()) {
+            if (!filter.invoke(i.next()))
+                i.remove();
+        }
+
+        return filteredList;
+    }
+
+    /**
      * run a foreach loop if the list is not null or empty and return teh results as a collection
      *
      * @param list the list to loop over
@@ -541,17 +569,25 @@ public final class LanguageUtil {
 
     /**
      * run a action async and post the result to a callback in the main thread.
+     *
      * @param action the action to execute
-     * @param callback the callback to post the result to. Result may be null
-     * @param <Rt> action return type
      */
-    public static <Rt> void async(@NonNull Action<Rt> action, @NonNull Consumer<Rt> callback)
-    {
+    public static void async(@NonNull Method action) {
+        backgroundExecutor.execute(action::invoke);
+    }
+
+    /**
+     * run a action async and post the result to a callback in the main thread.
+     *
+     * @param action   the action to execute
+     * @param callback the callback to post the result to. Result may be null
+     * @param <Rt>     action return type
+     */
+    public static <Rt> void async(@NonNull Action<Rt> action, @NonNull Consumer<Rt> callback) {
         backgroundExecutor.execute(() -> {
             final Rt r = action.invoke();
-            mainThreadHandler.post(() -> {
-                callback.invoke(r);
-            });
+            mainThreadHandler.post(()
+                    -> callback.invoke(r));
         });
     }
     //endregion

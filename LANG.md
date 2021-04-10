@@ -8,7 +8,7 @@ Tenshi includes multiple classes providing generic function interfaces (eg. for 
 
 **Return/Parameters**|**No Parameters**|**1 Parameter**|**2 Parameters**
 :-----:|:-----:|:-----:|:-----:
-Without Return|-|Consumer|BiConsumer
+Without Return|Method|Consumer|BiConsumer
 With Return|Action|Function|BiFunction
 
 # LanguageUtils
@@ -354,6 +354,25 @@ foreach(someList, (itm, i) -> {
 })
 ```
 
+## where
+filters a collection using a function
+
+Usage: 
+```java
+List<String> someList = ...;
+List<String> filtered = where(someList, (s) -> {
+    if(...){
+        // keep this item
+        return true;
+    }
+    else{
+        // remove this item
+        return false;
+    }
+});
+```
+
+
 ## collect
 Collects the results of a function call for all items in a collection
 
@@ -421,14 +440,14 @@ ClassB casted = cast(obj, new ClassB());
 ```
 
 ## async
-Run a action on in the background, with a callback that is called on the main (ui) thread.
+Runs a action on a background thread, optionally with a callback that is called on the main (ui) thread.
 
-Instead of using AsyncTask (now Deprecated), just do:
+Instead of using AsyncTask (now deprecated), just do:
 ```java
-async(this::someLongFunction, r -> Log.i("Test", "async return is " + r));
+async(() -> someLongFunction("this is a parameter"));
 ```
 
-__Or, if parameters are required__
+__Or, with a callback to the ui thread__
 ```java
 async(() -> someLongFunction("this is a parameter"), r -> Log.i("Test", "async return is " + r));
 ```
